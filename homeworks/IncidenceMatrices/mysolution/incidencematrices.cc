@@ -61,10 +61,28 @@ Eigen::SparseMatrix<int> computeEdgeVertexIncidenceMatrix(
     const lf::mesh::Mesh &mesh) {
   // Store edge-vertex incidence matrix here
   Eigen::SparseMatrix<int, Eigen::RowMajor> G;
+  std::cout<<"in compute G"<<std::endl;
 
   //====================
   // Your code goes here
   //====================
+
+  const lf::mesh::Mesh::size_type numVertices = mesh.NumEntities(2);
+  const lf::mesh::Mesh::size_type numEdges = mesh.NumEntities(1);
+
+  G = Eigen::SparseMatrix<int, Eigen::RowMajor>(numEdges,numVertices);
+  G.reserve(Eigen::VectorXi::Constant(numEdges,2));
+
+  for (const lf::mesh::Entity *edge : mesh.Entities(1)){
+    lf::mesh::Mesh::size_type edgeIdx = mesh.Index(*edge);
+    auto vertices = edge->SubEntities(1);
+
+    lf::mesh::Mesh::size_type firstvertexIdx = mesh.Index(*vertices[0]);
+    lf::mesh::Mesh::size_type secondvertexIdx = mesh.Index(*vertices[1]);
+
+    G.coeffRef(edgeIdx,firstvertexIdx) += 1;
+    G.coeffRef(edgeIdx,secondvertexIdx) -= 1;
+  }
 
   return G;
 }
@@ -81,10 +99,31 @@ Eigen::SparseMatrix<int> computeCellEdgeIncidenceMatrix(
   // Store cell-edge incidence matrix here
   Eigen::SparseMatrix<int, Eigen::RowMajor> D;
 
+  std::cout<<"in compute D"<<std::endl;
+
   //====================
   // Your code goes here
   //====================
 
+  const lf::mesh::Mesh::size_type numEdges = mesh.NumEntities(1);
+  const lf::mesh::Mesh::size_type numCells = mesh.NumEntities(0);
+
+  D = Eigen::SparseMatrix<int, Eigen::RowMajor>(numCells,numEdges);
+  D.reserve(Eigen::VectorXi::Constant(numCells,4));
+
+  for (const lf::mesh::Entity *cell : mesh.Entities(0)){
+    lf::mesh::Mesh::size_type cellIdx = mesh.Index(*cell);
+    auto edges = cell->SubEntities(1);
+    auto edgeOrientations = cell->RelativeOrientations(); //(Remember)
+
+    auto edgeIt = edges.begin();
+    auto orntIt = edgeOrientations.begin();
+    for (;edgeIt!=edges.end() && orntIt!=edgeOrientations.end();
+            ++edgeIt, ++orntIt) {
+        lf::mesh::Mesh::size_type edgeIdx = mesh.Index(**edgeIt);
+        D.coeffRef(cellIdx, edgeIdx) += lf::mesh::to_sign(*orntIt);
+    }
+  }
   return D;
 }
 /* SAM_LISTING_END_2 */
@@ -102,6 +141,26 @@ bool testZeroIncidenceMatrixProduct(const lf::mesh::Mesh &mesh) {
   //====================
   // Your code goes here
   //====================
+  //
+
+  Eigen::SparseMatrix<int> G = computeEdgeVertexIncidenceMatrix(mesh);
+  Eigen::SparseMatrix<int> D = computeCellEdgeIncidenceMatrix(mesh);
+
+  Eigen::MatrixXi Gd = Eigen::MatrixXi(G);
+  Eigen::MatrixXi Dd = Eigen::MatrixXi(D);
+  int a,b,c,d;
+  a = Gd.rows();
+  b = Gd.cols();
+  c = Dd.rows();
+  d = Dd.cols();
+  std::cout<<a<<b<<c<<d<<std::endl;
+  std::cout<<Gd<<std::endl;
+  std::cout<<Dd<<std::endl;
+
+  Eigen::SparseMatrix<int> DG = D*G;
+  if (DG.norm() == 0){
+    isZero = true;
+  }
   return isZero;
 }
 /* SAM_LISTING_END_3 */

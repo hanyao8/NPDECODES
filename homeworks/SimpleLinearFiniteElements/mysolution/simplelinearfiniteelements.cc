@@ -57,6 +57,11 @@ Eigen::Matrix3d ElementMatrix_Mass_LFE(
   //====================
   // Your code goes here
   //====================
+
+  element_matrix << 2.0,1.0,1.0, 1.0,2.0,1.0, 1.0,1.0,2.0;
+  double area = getArea(triangle);
+  element_matrix = element_matrix*area/12.0;
+
   return element_matrix;
 }
 /* SAM_LISTING_END_1 */
@@ -76,6 +81,37 @@ double L2Error(const TriaMesh2D &mesh, const Eigen::VectorXd &uFEM,
   //====================
   // Your code goes here
   //====================
+  /*
+  int M = mesh.elements.rows();
+  for (int i=0; i<M; i++){
+    Eigen::Matrix<double,2,3> triangle = mesh[i];
+    double K = getArea(triangle);
+    Eigen::Vector3d triangle_vertex_errors;
+    for (int j=0; j<3; j++){
+      int vertex_index = mesh.elements(i,j);
+      Eigen::Vector2d vertex_coords = mesh.vertices.row(vertex_index);
+      //l2error_squared += K/3.0 * ((exact(vertex_coords)-uFEM(vertex_index))**2);
+
+      triangle_vertex_errors(j) = exact(vertex_coords)-uFEM(vertex_index);
+    }
+    l2error_squared = K/3.0 * triangle_vertex_errors.squaredNorm();
+  }
+  */
+
+  for (int i = 0; i < mesh.elements.rows(); ++i) {
+    Eigen::Matrix<double, 2, 3> triangle = mesh[i];
+
+    // loop over all three vertices of the triangle
+    Eigen::Vector3d error_at_vertices;
+    for (int k = 0; k < 3; ++k) {
+      error_at_vertices(k) = exact(triangle.col(k)) - uFEM(mesh.elements(i, k));
+    }
+
+    // Add squared error per triangle
+    l2error_squared +=
+        getArea(triangle) / 3.0 * error_at_vertices.squaredNorm();
+  }
+
 
   return std::sqrt(l2error_squared);
 }
@@ -99,6 +135,47 @@ double H1Serror(
   //====================
   // Your code goes here
   //====================
+  /*
+  int M = mesh.elements.rows(); //number of triangles
+  for (int i=0; i<M; i++){
+    Eigen::Matrix<double,2,3> triangle = mesh[i];
+    Eigen::Matrix<double,2,3> triangle_grad_FEM = gradbarycoordinates(triangle);
+    double K = getArea(triangle);
+    double triangle_error_squared = 0.0;
+    for (int j=0; j<3; j++){
+      Eigen::Vector2d vertex_coords = triangle.col(j);
+      int vertex_index = mesh.elements(i,j);
+      Eigen::Vector2d grad_FEM = uFEM(vertex_index)*(triangle_grad_FEM.col(j));
+      triangle_error_squared += K/3.0 * (( grad_FEM -exact(vertex_coords)).squaredNorm());
+    }
+    H1Serror_squared += triangle_error_squared;
+  }
+  */
+
+  // loop over all triangles
+  for (int i = 0; i < mesh.elements.rows(); ++i) {
+    Eigen::Matrix<double, 2, 3> triangle = mesh[i];
+
+    // loop over all three vertices of the triangle
+    Eigen::Vector3d values_at_vertices;
+    for (int k = 0; k < 3; ++k) {
+      values_at_vertices(k) = uFEM[mesh.elements(i, k)];
+    }
+
+    // gradient of FEM approximation (same for all 3 vertices!)
+    Eigen::Vector2d gradient_FEM =
+        gradbarycoordinates(triangle) * values_at_vertices;
+
+    // loop over all three vertices of the triangle
+    Eigen::Vector3d error_at_vertices;
+    for (int k = 0; k < 3; ++k) {
+      Eigen::Vector2d gradient_exact = exact(triangle.col(k));
+      error_at_vertices(k) = (gradient_FEM - gradient_exact).squaredNorm();
+    }
+
+    // Add squared error per triangle
+    H1Serror_squared += getArea(triangle) / 3.0 * error_at_vertices.sum();
+  }
 
   return std::sqrt(H1Serror_squared);
 }
@@ -197,6 +274,13 @@ std::tuple<Eigen::VectorXd, double, double> Solve(
     return std::cos(2 * pi * x(0)) * std::cos(2 * pi * x(1));
   };
 
+  auto gradUExact = [pi](const Eigen::Vector2d &x) {
+    Eigen::Vector2d gradient;
+    gradient <<-2*pi*std::sin(2*pi*x(0))*std::cos(2*pi*x(1)),
+             -2*pi*std::cos(2*pi*x(0))*std::sin(2*pi*x(1));
+    return gradient;
+  };
+
   Eigen::VectorXd U;
   double l2error;
   double h1error;
@@ -208,6 +292,25 @@ std::tuple<Eigen::VectorXd, double, double> Solve(
   l2error = 1.0;
   h1error = 1.0;
   //====================
+  //
+
+  //int M = mesh.elements.rows(); //N triangles
+  //int N = mesh.vertices.rows(); //N vertices
+
+  Eigen::SparseMatrix<double> A;
+  Eigen::VectorXd v_rhs;
+
+  A = GalerkinAssembly(mesh,ElementMatrix_LaplMass_LFE);
+  v_rhs = assemLoad_LFE(mesh,f);
+
+  Eigen::SparseLU<Eigen::SparseMatrix<double>,Eigen::COLAMDOrdering<int>> solver;
+  solver.analyzePattern(A);
+  solver.factorize(A);
+  U = solver.solve(v_rhs);
+ 
+  l2error = L2Error(mesh,U,uExact);
+  h1error = SimpleLinearFiniteElements::H1Serror(mesh,U,gradUExact);
+
   return std::make_tuple(U, l2error, h1error);
 }
 /* SAM_LISTING_END_4 */
