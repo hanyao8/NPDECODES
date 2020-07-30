@@ -27,6 +27,10 @@ std::array<std::size_t, 3> countEntityDofs(
   // Idea: iterate over entities in the mesh and get interior number of dofs for
   // each
   std::shared_ptr<const lf::mesh::Mesh> mesh = dofhandler.Mesh();
+
+//  std::cout<<"Total number of global basis functions"<<std::endl;
+//  std::cout<<dofhandler.NumDofs()<<std::endl;;
+
   for (std::size_t codim = 0; codim <= 2; ++codim) {
     entityDofs[codim] = 0;
     for (const auto *el : mesh->Entities(codim)) {
@@ -34,6 +38,8 @@ std::array<std::size_t, 3> countEntityDofs(
         throw "Only triangular meshes are allowed!";
       }
       entityDofs[codim] += dofhandler.NumInteriorDofs(*el);
+//      std::cout<<dofhandler.NumInteriorDofs(*el)<<std::endl;
+//      std::cout<<dofhandler.NumLocalDofs(*el)<<std::endl;
     }
   }
   return entityDofs;

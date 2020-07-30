@@ -27,7 +27,11 @@ Eigen::VectorXd solvePoissonBVP() {
   //====================
   // Your code goes here
   //====================
+  lf::uscalfe::LinearFELaplaceElementMatrix elmat_builder;
+  lf::uscalfe::LinearFELocalLoadVector<double,decltype(mf_f)> elvec_builder(mf_f);
 
+  solution = solve(elmat_builder, elvec_builder);
+  
   return solution;
 }
 /* SAM_LISTING_END_2 */

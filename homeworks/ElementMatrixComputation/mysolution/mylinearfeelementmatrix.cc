@@ -34,7 +34,41 @@ Eigen::Matrix<double, 4, 4> MyLinearFEElementMatrix::Eval(
   //====================
   // Your code goes here
   //====================
+  Eigen::Matrix<double,4,4> laplace_elem_mat;
+  Eigen::Matrix<double,4,4> mass_elem_mat;
 
+  lf::uscalfe::LinearFELaplaceElementMatrix laplace_elmat_builder;
+  laplace_elem_mat = laplace_elmat_builder.Eval(cell);
+
+  switch (ref_el) {
+      case (lf::base::RefEl::kTria()): {
+          double area = 
+              0.5*
+              ( (vertices(0,1)-vertices(0,0))*(vertices(1,2)-vertices(1,0))-
+                (vertices(1,1)-vertices(1,0))*(vertices(0,2)-vertices(0,0)))
+          mass_elem_mat <<
+          2.0,1.0,1.0,0.0,
+          1.0,2.0,1.0.0.0,
+          1.0,1.0,2.0,0.0,
+          0.0,0.0,0.0,0.0;
+
+          mass_elem_mat *= area/12.0;
+          break;
+      }
+      case (lf::base::RefEL::kQuad()): {
+          double area = 
+              (vertices(0,1)-vertices(0,0))*(vertices(1,3)-vertices(1,0));
+          mass_elem_mat <<
+          4.0,2.0,1.0,2.0,
+          2.0,4.0,2.0,1.0,
+          1.0,2.0,4.0,2.0,
+          2.0,1.0,2.0,4.0;
+
+          mass_elem_mat *= area/36.0;
+          break;
+      }
+  }
+  elem_mat = laplace_elem_mat + mass_elem_mat;
   return elem_mat;
 }
 /* SAM_LISTING_END_1 */

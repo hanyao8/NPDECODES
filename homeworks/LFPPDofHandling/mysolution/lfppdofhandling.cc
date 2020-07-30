@@ -27,6 +27,20 @@ std::array<std::size_t, 3> countEntityDofs(
   //====================
   // Your code goes here
   //====================
+  for (int codim=0; codim<3; codim++){
+    entityDofs[codim] = 0;
+  }
+
+  std::shared_ptr<const lf::mesh::Mesh> mesh = dofhandler.Mesh();
+
+  for (int codim=0; codim<3; codim++){
+    for (const auto *entity : mesh->Entities(codim)){
+      if (entity->RefEl() == lf::base::RefEl::kQuad()){
+        throw("Error");
+      }
+      entityDofs[codim] += dofhandler.NumInteriorDofs(*entity);
+    }
+  }
   return entityDofs;
 }
 /* SAM_LISTING_END_1 */
@@ -42,6 +56,12 @@ std::size_t countBoundaryDofs(const lf::assemble::DofHandler &dofhandler) {
   //====================
   // Your code goes here
   //====================
+
+  for (const auto *vertex : mesh->Entities(2)){
+    if (bd_flags(*vertex)){
+      no_dofs_on_bd+=1;
+    }
+  }
   return no_dofs_on_bd;
 }
 /* SAM_LISTING_END_2 */
@@ -55,6 +75,21 @@ double integrateLinearFEFunction(
   //====================
   // Your code goes here
   //====================
+
+  std::shared_ptr<const lf::mesh::Mesh> mesh = dofhandler.Mesh();
+  double area;
+  for (const auto *cell : mesh->Entities(0)){
+    lf::base::size_type cell_local_dofs = dofhandler.NumLocalDofs(*cell);
+    if (cell_local_dofs!=3){
+      throw("Error");
+    }
+    lf::geometry::Geometry *cell_geo = cell->Geometry();
+    area = lf::geometry::Volume(*cell_geo);
+    const auto global_idxs = dofhandler.GlobalDofIndices(*cell);
+    for (auto idx_p=global_idxs.begin() ; idx_p<global_idxs.end() ; ++idx_p){
+      I += area/3.0 * mu(*idx_p);
+    }
+  }
   return I;
 }
 /* SAM_LISTING_END_3 */
@@ -67,6 +102,21 @@ double integrateQuadraticFEFunction(const lf::assemble::DofHandler &dofhandler,
   //====================
   // Your code goes here
   //====================
+  //
+  std::shared_ptr<const lf::mesh::Mesh> mesh = dofhandler.Mesh();
+  double area;
+  for (const auto *cell : mesh->Entities(0)){
+    lf::base::size_type cell_local_dofs = dofhandler.NumLocalDofs(*cell);
+    if (cell_local_dofs!=6){
+      throw("Error");
+    }
+    lf::geometry::Geometry *cell_geo = cell->Geometry();
+    area = lf::geometry::Volume(*cell_geo);
+    const auto global_idxs = dofhandler.GlobalDofIndices(*cell);
+    for (int i=3; i<6; i++){
+      I += (area/3.0 * mu[global_idxs[i]]);
+    }
+  }
   return I;
 }
 /* SAM_LISTING_END_4 */
@@ -101,6 +151,17 @@ Eigen::VectorXd convertDOFsLinearQuadratic(
     // assign the coefficients of mu to the correct entries of zeta, use
     // the previous subproblem 2-9.a
     //====================
+
+    if (dofh_Linear_FE.NumLocalDofs(*cell) != 3 ||
+        dofh_Quadratic_FE.NumLocalDofs(*cell) != 6){
+      throw("Error");
+    }
+    nonstd::span<const lf::assemble::gdof_idx_t> lin_idxs = dofh_Linear_FE.GlobalDofIndices(*cell);
+    nonstd::span<const lf::assemble::gdof_idx_t> quad_idxs = dofh_Quadratic_FE.GlobalDofIndices(*cell);
+    for (int i=0; i<3; i++){
+      zeta(quad_idxs[i]) = mu(lin_idxs[i]);
+      zeta(quad_idxs[i+3]) = 0.5*mu(lin_idxs[i])+0.5*mu(lin_idxs[(i+1)%3]);
+    }
   }
   return zeta;
 }

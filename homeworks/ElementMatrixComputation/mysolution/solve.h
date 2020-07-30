@@ -76,6 +76,11 @@ Eigen::VectorXd solve(ELMAT_BUILDER &elmat_provider,
   //====================
   /* SAM_LISTING_END_1 */
 
+  Eigen::SparseLU<Eigen::SparseMatrix<double>> solver;
+  solver.analyzePattern(A_crs);
+  solver.factorize(A_crs);
+  sol_vec = solver.solve(phi);
+  
   double solver_error = (A_crs * sol_vec - phi).norm();
   double solver_relative_error = solver_error / phi.norm();
 
